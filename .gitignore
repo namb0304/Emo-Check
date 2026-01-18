@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Build outputs
+.nuxt/
+.output/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Model files (large binary files)
+*.pth
+*.pt
+*.onnx
+*.pkl
+
+# Training outputs
+training/*.pth
+training/*.png
+training/dataset/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.pytest_cache/
+
+# Misc
+*.bak
+*.tmp
+Thumbs.db
