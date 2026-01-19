@@ -26,6 +26,8 @@ build/
 
 # Training outputs
 training/*.pth
+# モデル本体は分割ファイル(.aa, .ab等)から復元するため除外
+backend/models/*.pth
 training/*.png
 training/dataset/
 

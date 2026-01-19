@@ -343,6 +343,12 @@ async def boost(
         raise HTTPException(status_code=500, detail=f"画像加工中にエラーが発生しました: {str(e)}")
 
 
+# 起動時にモデルを事前ロード（デプロイ時のタイムアウト対策）
+print("Pre-loading models at startup...")
+get_models()
+print("Models ready!")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
