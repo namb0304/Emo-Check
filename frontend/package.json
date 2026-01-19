@@ -1,0 +1,25 @@
+{
+  "name": "emo-check-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@phosphor-icons/vue": "^2.2.1",
+    "axios": "^1.6.5",
+    "html2canvas": "^1.4.1",
+    "nuxt": "^3.14.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@nuxt/devtools": "^1.7.0",
+    "@nuxtjs/tailwindcss": "^6.12.0",
+    "typescript": "^5.3.0"
+  }
+}
