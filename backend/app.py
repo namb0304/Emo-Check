@@ -6,6 +6,7 @@ Emo-Check: FastAPI バックエンド
 
 import os
 import io
+import glob  # 追加: ファイル検索用
 import base64
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -23,6 +24,7 @@ try:
     HEIC_SUPPORTED = True
 except ImportError:
     HEIC_SUPPORTED = False
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -68,6 +70,44 @@ def build_vit_b16(num_classes: int = 2):
     return model
 
 
+def ensure_model_file(model_path):
+    """
+    分割されたモデルファイルがあれば結合して復元する
+    """
+    # 既に実体ファイルがあり、かつサイズが十分（例: 1MB以上）なら何もしない
+    # ※LFSポインタファイル（1KB以下）が残っている場合の対策
+    if os.path.exists(model_path) and os.path.getsize(model_path) > 1024 * 1024:
+        return
+
+    print(f"Reconstructing {model_path} from parts...")
+    base_name = os.path.basename(model_path)
+    dir_name = os.path.dirname(model_path)
+    
+    # 分割ファイルを探す (例: resnet152.pth.aa, resnet152.pth.ab ...)
+    pattern = os.path.join(dir_name, base_name + ".*")
+    # .pth 自体を除外して、分割パーツ(.aa, .ab等)のみを取得
+    parts = sorted([p for p in glob.glob(pattern) if not p.endswith('.pth')])
+
+    if not parts:
+        # 分割ファイルがない場合はスキップ（既存ファイルを信じる）
+        print(f"No split parts found for {model_path}")
+        return
+
+    # 結合処理
+    try:
+        with open(model_path, 'wb') as outfile:
+            for part in parts:
+                print(f"  - Appending {part}")
+                with open(part, 'rb') as infile:
+                    outfile.write(infile.read())
+        print(f"Successfully reconstructed {model_path}")
+    except Exception as e:
+        print(f"Error reconstructing model: {e}")
+        # エラー時は不完全なファイルを削除しておく
+        if os.path.exists(model_path):
+            os.remove(model_path)
+
+
 def load_models():
     """モデルをロード"""
     global resnet_model, vit_model, device
@@ -79,6 +119,10 @@ def load_models():
     models_dir = os.path.join(os.path.dirname(__file__), 'models')
     resnet_path = os.path.join(models_dir, 'resnet152.pth')
     vit_path = os.path.join(models_dir, 'vit_b16.pth')
+
+    # ★ここで分割ファイルを結合！
+    ensure_model_file(resnet_path)
+    ensure_model_file(vit_path)
 
     # ResNet152のロード
     resnet_model = build_resnet152()
