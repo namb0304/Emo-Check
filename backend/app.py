@@ -15,6 +15,14 @@ import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+
+# HEIC対応
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    HEIC_SUPPORTED = True
+except ImportError:
+    HEIC_SUPPORTED = False
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -263,19 +271,31 @@ async def predict(
         model_used: 使用したモデル名
         color_palette: 抽出したカラーパレット
     """
-    # ファイル形式のチェック
-    if not file.content_type or not file.content_type.startswith("image/"):
+    # ファイル形式のチェック（HEIC含む）
+    allowed_types = ["image/", "application/octet-stream"]  # HEICはoctet-streamで来ることがある
+    is_heic = file.filename and file.filename.lower().endswith(('.heic', '.heif'))
+
+    if not is_heic and (not file.content_type or not any(file.content_type.startswith(t) for t in allowed_types)):
         raise HTTPException(status_code=400, detail="画像ファイルをアップロードしてください")
+
+    if is_heic and not HEIC_SUPPORTED:
+        raise HTTPException(status_code=400, detail="HEIC形式はサポートされていません。pillow-heifをインストールしてください。")
 
     try:
         # 画像データを読み込み
         image_bytes = await file.read()
 
+        # PILで画像を開く（HEICも自動対応）
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+        # HEIC等の場合、image_bytesをJPEG形式に変換してからカラーパレット抽出
+        if is_heic:
+            jpeg_buffer = io.BytesIO()
+            image.save(jpeg_buffer, format='JPEG', quality=95)
+            image_bytes = jpeg_buffer.getvalue()
+
         # カラーパレットを抽出
         color_palette = extract_color_palette(image_bytes)
-
-        # PILで画像を開く
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         image_tensor = transform(image).unsqueeze(0).to(device)
 
         # モデル選択と推論
@@ -322,9 +342,15 @@ async def boost(
         image_base64: Base64エンコードされた加工後画像
         filter_applied: 適用されたフィルター名
     """
-    # ファイル形式のチェック
-    if not file.content_type or not file.content_type.startswith("image/"):
+    # ファイル形式のチェック（HEIC含む）
+    allowed_types = ["image/", "application/octet-stream"]
+    is_heic = file.filename and file.filename.lower().endswith(('.heic', '.heif'))
+
+    if not is_heic and (not file.content_type or not any(file.content_type.startswith(t) for t in allowed_types)):
         raise HTTPException(status_code=400, detail="画像ファイルをアップロードしてください")
+
+    if is_heic and not HEIC_SUPPORTED:
+        raise HTTPException(status_code=400, detail="HEIC形式はサポートされていません。pillow-heifをインストールしてください。")
 
     # フィルタータイプのチェック
     valid_filters = ["pixel", "y2k"]
@@ -337,6 +363,13 @@ async def boost(
     try:
         # 画像データを読み込み
         image_bytes = await file.read()
+
+        # HEIC形式の場合、JPEGに変換
+        if is_heic:
+            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            jpeg_buffer = io.BytesIO()
+            image.save(jpeg_buffer, format='JPEG', quality=95)
+            image_bytes = jpeg_buffer.getvalue()
 
         # フィルター適用
         if filter_type.lower() == "pixel":

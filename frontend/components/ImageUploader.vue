@@ -34,7 +34,9 @@ const handleFileSelect = (event: Event) => {
 }
 
 const handleFile = (file: File) => {
-  if (!file.type.startsWith('image/')) {
+  // HEIC/HEIFファイルもサポート
+  const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')
+  if (!file.type.startsWith('image/') && !isHeic) {
     alert('画像ファイルを選択してください')
     return
   }
@@ -132,14 +134,14 @@ const openFileDialog = () => {
       <div class="mt-6 flex items-center gap-2 text-xs text-dark-500">
         <span class="px-2 py-1 rounded bg-dark-700">JPG</span>
         <span class="px-2 py-1 rounded bg-dark-700">PNG</span>
-        <span class="px-2 py-1 rounded bg-dark-700">WebP</span>
+        <span class="px-2 py-1 rounded bg-dark-700">HEIC</span>
       </div>
 
       <!-- Hidden input -->
       <input
         ref="fileInput"
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         class="hidden"
         @change="handleFileSelect"
       />

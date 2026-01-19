@@ -4,17 +4,40 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  message: '分析中...',
+  message: '分析中',
 })
 
+// 分析中のサブメッセージ（ランダムで切り替え）
+const subMessages = [
+  '色彩を分析中',
+  '構図を確認中',
+  '雰囲気を感知中',
+  'エモさを計測中',
+  'ノスタルジー度をチェック',
+  '儚さを検出中',
+  'メランコリー成分を解析',
+]
+
 const dots = ref('')
+const currentSubMessage = ref(subMessages[0])
+let subMessageIndex = 0
 
 onMounted(() => {
-  const interval = setInterval(() => {
+  // ドットアニメーション
+  const dotsInterval = setInterval(() => {
     dots.value = dots.value.length >= 3 ? '' : dots.value + '.'
   }, 400)
 
-  onUnmounted(() => clearInterval(interval))
+  // サブメッセージ切り替え（1.5秒ごと）
+  const messageInterval = setInterval(() => {
+    subMessageIndex = (subMessageIndex + 1) % subMessages.length
+    currentSubMessage.value = subMessages[subMessageIndex]
+  }, 1500)
+
+  onUnmounted(() => {
+    clearInterval(dotsInterval)
+    clearInterval(messageInterval)
+  })
 })
 </script>
 
@@ -52,12 +75,14 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- テキスト -->
+      <!-- メインメッセージ -->
       <p class="text-xl font-medium text-white">
         {{ message }}<span class="inline-block w-8 text-left">{{ dots }}</span>
       </p>
-      <p class="text-sm text-dark-400 mt-2">
-        AIがあなたの写真を分析しています
+
+      <!-- サブメッセージ（切り替わる） -->
+      <p class="text-sm text-dark-400 mt-2 h-5 transition-opacity duration-300">
+        {{ currentSubMessage }}
       </p>
     </div>
   </div>

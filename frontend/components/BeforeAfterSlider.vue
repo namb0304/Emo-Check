@@ -45,6 +45,7 @@ const onTouchStart = (e: TouchEvent) => {
 
 const onTouchMove = (e: TouchEvent) => {
   if (!isDragging.value) return
+  e.preventDefault() // スクロールを防止
   updateSlider(e.touches[0].clientX)
 }
 
@@ -55,7 +56,7 @@ const onTouchEnd = () => {
 onMounted(() => {
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
-  document.addEventListener('touchmove', onTouchMove)
+  document.addEventListener('touchmove', onTouchMove, { passive: false })
   document.addEventListener('touchend', onTouchEnd)
 })
 
@@ -81,7 +82,7 @@ onUnmounted(() => {
     <!-- スライダーコンテナ -->
     <div
       ref="containerRef"
-      class="relative w-full aspect-video rounded-xl overflow-hidden cursor-ew-resize select-none"
+      class="relative w-full aspect-video rounded-xl overflow-hidden cursor-ew-resize select-none touch-none"
       @mousedown="onMouseDown"
       @touchstart="onTouchStart"
     >
@@ -90,6 +91,7 @@ onUnmounted(() => {
         :src="afterUrl"
         :alt="afterLabel"
         class="absolute inset-0 w-full h-full object-cover"
+        draggable="false"
       />
 
       <!-- Before画像（クリップ） -->
@@ -102,34 +104,41 @@ onUnmounted(() => {
           :alt="beforeLabel"
           class="absolute inset-0 w-full h-full object-cover"
           :style="{ width: `${100 / (sliderPosition / 100)}%`, maxWidth: 'none' }"
+          draggable="false"
         />
       </div>
 
-      <!-- スライダーライン -->
+      <!-- スライダーライン（細くする） -->
       <div
-        class="absolute top-0 bottom-0 w-1 bg-white shadow-lg"
+        class="absolute top-0 bottom-0 w-0.5 bg-white/80 shadow-lg"
         :style="{ left: `${sliderPosition}%`, transform: 'translateX(-50%)' }"
       >
+        <!-- タッチ判定領域（透明・広め） -->
+        <div class="absolute inset-y-0 -left-6 w-12" />
+
         <!-- ハンドル -->
         <div
-          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-xl flex items-center justify-center"
+          :class="[
+            'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-xl flex items-center justify-center transition-transform',
+            isDragging ? 'w-12 h-12 scale-110' : 'w-10 h-10',
+          ]"
         >
           <div class="flex items-center gap-0.5">
-            <div class="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-dark-800" />
-            <div class="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[6px] border-l-dark-800" />
+            <div class="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[5px] border-r-dark-800" />
+            <div class="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[5px] border-l-dark-800" />
           </div>
         </div>
       </div>
 
       <!-- ラベル -->
       <div
-        class="absolute top-4 left-4 px-2 py-1 rounded bg-dark-900/80 text-xs text-white"
+        class="absolute top-3 left-3 px-2 py-1 rounded bg-dark-900/80 text-xs text-white pointer-events-none"
         v-if="sliderPosition > 15"
       >
         {{ beforeLabel }}
       </div>
       <div
-        class="absolute top-4 right-4 px-2 py-1 rounded bg-dark-900/80 text-xs text-white"
+        class="absolute top-3 right-3 px-2 py-1 rounded bg-dark-900/80 text-xs text-white pointer-events-none"
         v-if="sliderPosition < 85"
       >
         {{ afterLabel }}
