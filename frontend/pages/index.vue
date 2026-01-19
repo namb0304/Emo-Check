@@ -44,6 +44,9 @@ const steps = [
 
 <template>
   <div class="min-h-screen bg-dark-950">
+    <!-- カーソル軌跡エフェクト -->
+    <CursorTrail />
+
     <!-- Header -->
     <AppHeader :transparent="!isScrolled" />
 
