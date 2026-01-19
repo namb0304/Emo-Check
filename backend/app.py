@@ -83,7 +83,7 @@ def load_models():
     # ResNet152のロード
     resnet_model = build_resnet152()
     if os.path.exists(resnet_path):
-        resnet_model.load_state_dict(torch.load(resnet_path, map_location=device))
+        resnet_model.load_state_dict(torch.load(resnet_path, map_location=device, weights_only=False))
         print(f"ResNet152 loaded from {resnet_path}")
     else:
         print(f"Warning: ResNet152 weights not found at {resnet_path}. Using random weights.")
@@ -93,7 +93,7 @@ def load_models():
     # ViT-B/16のロード
     vit_model = build_vit_b16()
     if os.path.exists(vit_path):
-        vit_model.load_state_dict(torch.load(vit_path, map_location=device))
+        vit_model.load_state_dict(torch.load(vit_path, map_location=device, weights_only=False))
         print(f"ViT-B/16 loaded from {vit_path}")
     else:
         print(f"Warning: ViT-B/16 weights not found at {vit_path}. Using random weights.")
