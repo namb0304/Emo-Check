@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PhPixelLogo, PhFilmStrip, PhSpinner, PhDownloadSimple, PhArrowLeft } from '@phosphor-icons/vue'
+import { PhSquaresFour, PhFilmStrip, PhSpinner, PhDownloadSimple, PhArrowLeft } from '@phosphor-icons/vue'
 import type { FilterType } from '~/composables/useEmoCheck'
 
 interface Props {
@@ -23,7 +23,7 @@ const filters = [
     id: 'pixel' as FilterType,
     name: 'Pixel Art',
     description: 'ドット絵風に変換',
-    icon: PhPixelLogo,
+    icon: PhSquaresFour,
     gradient: 'from-green-400 to-cyan-400',
     bgGlow: 'bg-green-400/20',
   },
