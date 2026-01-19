@@ -100,12 +100,12 @@ def ensure_model_file(model_path):
 def get_models():
     """
     モデルを取得する（未ロードの場合はここでロードする）
-    これぞ「遅延読み込み」！
+    メモリ節約のためResNetのみロード
     """
     global resnet_model, vit_model, device
 
     # すでにロード済みならそれを返す（2回目以降は爆速）
-    if resnet_model is not None and vit_model is not None:
+    if resnet_model is not None:
         return resnet_model, vit_model, device
 
     print("Loading models for the first time...")
@@ -114,13 +114,11 @@ def get_models():
 
     models_dir = os.path.join(os.path.dirname(__file__), 'models')
     resnet_path = os.path.join(models_dir, 'resnet152.pth')
-    vit_path = os.path.join(models_dir, 'vit_b16.pth')
 
     # ファイル結合
     ensure_model_file(resnet_path)
-    ensure_model_file(vit_path)
 
-    # ResNetロード
+    # ResNetロード（メモリ節約のためViTは無効化）
     resnet_model = build_resnet152()
     if os.path.exists(resnet_path):
         resnet_model.load_state_dict(torch.load(resnet_path, map_location=device, weights_only=False))
@@ -130,15 +128,9 @@ def get_models():
     resnet_model = resnet_model.to(device)
     resnet_model.eval()
 
-    # ViTロード
-    vit_model = build_vit_b16()
-    if os.path.exists(vit_path):
-        vit_model.load_state_dict(torch.load(vit_path, map_location=device, weights_only=False))
-        print("ViT-B/16 loaded")
-    else:
-        print("Warning: ViT-B/16 weights not found.")
-    vit_model = vit_model.to(device)
-    vit_model.eval()
+    # ViTは無効化（メモリ節約）
+    vit_model = None
+    print("ViT disabled to save memory")
 
     return resnet_model, vit_model, device
 
@@ -272,7 +264,8 @@ async def predict(
         color_palette = extract_color_palette(image_bytes)
         image_tensor = transform(image).unsqueeze(0).to(current_device)
 
-        if model_type.lower() == "vit":
+        # メモリ節約のため常にResNetを使用
+        if model_type.lower() == "vit" and current_vit is not None:
             model = current_vit
             model_name = "ViT-B/16"
         else:
