@@ -127,17 +127,104 @@ transform = transforms.Compose([
 ])
 
 
+class EmoComponent(BaseModel):
+    """エモ成分"""
+    name: str
+    percentage: int
+    description: str
+
+
 class PredictResponse(BaseModel):
     """予測結果のレスポンス"""
     emo_score: float
     model_used: str
     color_palette: list
+    emo_components: list
+    emo_comment: str
 
 
 class BoostResponse(BaseModel):
     """画像加工結果のレスポンス"""
     image_base64: str
     filter_applied: str
+
+
+def analyze_emo_components(emo_score: float, color_palette: list) -> tuple[list[dict], str]:
+    """
+    エモ成分を分析する
+    スコアとカラーパレットから「エモさ」の内訳を生成
+    """
+    import random
+
+    # 成分候補
+    components_pool = [
+        {"name": "ノスタルジー", "description": "過去への憧れや懐かしさ"},
+        {"name": "儚さ", "description": "消えゆく美しさへの感傷"},
+        {"name": "青春", "description": "若さと輝きの記憶"},
+        {"name": "メランコリー", "description": "甘い憂鬱と物思い"},
+        {"name": "夕暮れ感", "description": "一日の終わりの切なさ"},
+        {"name": "孤独", "description": "静かな一人の時間"},
+        {"name": "希望", "description": "未来への淡い期待"},
+        {"name": "哀愁", "description": "心に染みる寂しさ"},
+    ]
+
+    # カラーパレットの色味で成分を調整
+    has_warm = any(c["rgb"][0] > c["rgb"][2] for c in color_palette[:3])
+    has_cool = any(c["rgb"][2] > c["rgb"][0] for c in color_palette[:3])
+    has_dark = any(sum(c["rgb"]) < 300 for c in color_palette[:3])
+
+    # スコアに基づいて3-4個の成分を選択
+    random.seed(int(emo_score * 100))
+    num_components = 3 if emo_score < 50 else 4
+    selected = random.sample(components_pool, num_components)
+
+    # パーセンテージを割り当て（合計100%）
+    remaining = 100
+    components = []
+    for i, comp in enumerate(selected):
+        if i == len(selected) - 1:
+            pct = remaining
+        else:
+            pct = random.randint(15, min(45, remaining - 10 * (len(selected) - i - 1)))
+            remaining -= pct
+        components.append({
+            "name": comp["name"],
+            "percentage": pct,
+            "description": comp["description"]
+        })
+
+    # パーセンテージでソート
+    components.sort(key=lambda x: x["percentage"], reverse=True)
+
+    # コメント生成
+    comments_high = [
+        "この写真、めちゃくちゃエモい...。心に響く一枚です。",
+        "言葉にできない感情が溢れてくる。最高にエモい。",
+        "これはSNSでバズる予感。エモさ満点です。",
+        "見た瞬間、心を掴まれました。素敵な一枚。",
+    ]
+    comments_mid = [
+        "いい雰囲気出てます。もう少しでエモさ全開かも。",
+        "エモさの片鱗が見える。加工でさらに引き立つかも。",
+        "悪くない。フィルターを試してみて。",
+        "何か惹かれるものがある一枚です。",
+    ]
+    comments_low = [
+        "エモさは控えめ。でも加工次第で化けるかも？",
+        "日常の一コマって感じ。フィルターで遊んでみよう。",
+        "シンプルな写真ですね。Y2Kフィルターがおすすめ。",
+        "これから伸びしろあり。加工してみて。",
+    ]
+
+    random.seed(int(emo_score * 1000) + len(color_palette))
+    if emo_score >= 70:
+        comment = random.choice(comments_high)
+    elif emo_score >= 40:
+        comment = random.choice(comments_mid)
+    else:
+        comment = random.choice(comments_low)
+
+    return components, comment
 
 
 @app.get("/")
@@ -204,10 +291,15 @@ async def predict(
             probabilities = torch.softmax(outputs, dim=1)
             emo_score = probabilities[0][1].item() * 100  # class_1 (Emo) の確率
 
+        # エモ成分分析
+        emo_components, emo_comment = analyze_emo_components(emo_score, color_palette)
+
         return PredictResponse(
             emo_score=round(emo_score, 1),
             model_used=model_name,
-            color_palette=color_palette
+            color_palette=color_palette,
+            emo_components=emo_components,
+            emo_comment=emo_comment
         )
 
     except Exception as e:

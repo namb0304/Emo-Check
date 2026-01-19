@@ -1,214 +1,237 @@
 <script setup lang="ts">
-import { PhGithubLogo, PhArrowClockwise, PhSparkle } from '@phosphor-icons/vue'
-import type { ModelType, FilterType, PredictResult } from '~/composables/useEmoCheck'
+import { PhSparkle, PhCamera, PhMagicWand, PhShareNetwork, PhArrowRight, PhPlay } from '@phosphor-icons/vue'
 
-// Composable
-const { isLoading, error, predictEmoScore, boostImage, downloadImage } = useEmoCheck()
+// スクロールに応じたヘッダーの透明度制御
+const isScrolled = ref(false)
 
-// State
-const selectedFile = ref<File | null>(null)
-const previewUrl = ref<string | null>(null)
-const selectedModel = ref<ModelType>('resnet')
-const result = ref<PredictResult | null>(null)
-const processedImageUrl = ref<string | null>(null)
-const appliedFilter = ref<string | null>(null)
-const isBoostProcessing = ref(false)
-
-// 分析実行
-const analyzeImage = async () => {
-  if (!selectedFile.value) return
-
-  result.value = await predictEmoScore(selectedFile.value, selectedModel.value)
-  processedImageUrl.value = null
-  appliedFilter.value = null
-}
-
-// フィルター適用
-const applyFilter = async (filterType: FilterType) => {
-  if (!selectedFile.value) return
-
-  isBoostProcessing.value = true
-  const boostResult = await boostImage(selectedFile.value, filterType)
-  isBoostProcessing.value = false
-
-  if (boostResult) {
-    processedImageUrl.value = `data:image/png;base64,${boostResult.image_base64}`
-    appliedFilter.value = boostResult.filter_applied
+onMounted(() => {
+  const handleScroll = () => {
+    isScrolled.value = window.scrollY > 50
   }
-}
-
-// ダウンロード
-const handleDownload = () => {
-  if (!processedImageUrl.value) return
-
-  const base64 = processedImageUrl.value.split(',')[1]
-  const filterName = appliedFilter.value?.toLowerCase().replace(/\s+/g, '_') || 'emo'
-  downloadImage(base64, `emo_check_${filterName}_${Date.now()}.png`)
-}
-
-// Boosterリセット
-const resetBooster = () => {
-  processedImageUrl.value = null
-  appliedFilter.value = null
-}
-
-// 全リセット
-const resetAll = () => {
-  selectedFile.value = null
-  previewUrl.value = null
-  result.value = null
-  processedImageUrl.value = null
-  appliedFilter.value = null
-}
-
-// ファイルが変更されたら結果をリセット
-watch(selectedFile, () => {
-  result.value = null
-  processedImageUrl.value = null
-  appliedFilter.value = null
+  window.addEventListener('scroll', handleScroll)
+  onUnmounted(() => window.removeEventListener('scroll', handleScroll))
 })
+
+// 特徴リスト
+const features = [
+  {
+    icon: PhCamera,
+    title: 'AIエモ度判定',
+    description: 'ResNet152とViT-B/16の2つのAIモデルがあなたの写真を分析。エモさを0〜100%でスコア化します。',
+    gradient: 'from-emo-pink to-rose-500',
+  },
+  {
+    icon: PhMagicWand,
+    title: 'エモ加工フィルター',
+    description: 'Pixel ArtやY2K Filmなど、エモさを引き立てるフィルターで写真をさらに魅力的に。',
+    gradient: 'from-emo-purple to-violet-500',
+  },
+  {
+    icon: PhShareNetwork,
+    title: 'SNSシェア',
+    description: '判定結果をおしゃれなカードにして、そのままSNSでシェア。友達と盛り上がろう。',
+    gradient: 'from-emo-blue to-cyan-500',
+  },
+]
+
+// 使い方ステップ
+const steps = [
+  { number: '01', title: '写真をアップロード', description: 'ドラッグ&ドロップまたはクリックで選択' },
+  { number: '02', title: 'AIが分析', description: '数秒でエモ度とカラーパレットを解析' },
+  { number: '03', title: '加工&シェア', description: 'フィルターで加工してSNSへ投稿' },
+]
 </script>
 
 <template>
-  <div class="min-h-screen bg-dark-900 noise">
-    <!-- ローディングオーバーレイ -->
-    <LoadingOverlay v-if="isLoading" message="エモ度を分析中" />
-    <LoadingOverlay v-if="isBoostProcessing" message="画像を加工中" />
+  <div class="min-h-screen bg-dark-950">
+    <!-- Header -->
+    <AppHeader :transparent="!isScrolled" />
 
-    <!-- 背景のグラデーション効果 -->
-    <div class="fixed inset-0 overflow-hidden pointer-events-none">
-      <div
-        class="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-emo-pink/10 to-transparent rounded-full blur-3xl"
-      />
-      <div
-        class="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-emo-purple/10 to-transparent rounded-full blur-3xl"
-      />
-    </div>
+    <!-- Hero Section -->
+    <section class="relative min-h-screen flex items-center justify-center overflow-hidden">
+      <!-- Animated background -->
+      <div class="absolute inset-0">
+        <div class="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-emo-pink/20 rounded-full blur-[100px] animate-pulse-slow" />
+        <div class="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-emo-purple/20 rounded-full blur-[100px] animate-pulse-slow animation-delay-200" />
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-emo-blue/10 rounded-full blur-[80px] animate-float" />
+      </div>
 
-    <!-- メインコンテンツ -->
-    <div class="relative z-10">
-      <!-- ヘッダー -->
-      <header class="py-6 px-4">
-        <div class="max-w-4xl mx-auto flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <PhSparkle :size="28" weight="duotone" class="text-emo-pink" />
-            <h1 class="text-2xl font-display font-bold gradient-text">
-              Emo-Check
-            </h1>
-          </div>
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="p-2 rounded-lg hover:bg-dark-800 transition-colors text-dark-400 hover:text-white"
+      <!-- Grid pattern overlay -->
+      <div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100px_100px]" />
+
+      <!-- Content -->
+      <div class="relative z-10 text-center px-4 max-w-4xl mx-auto pt-20">
+        <!-- Badge -->
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-dark-800/50 border border-dark-700 mb-8 animate-fade-in">
+          <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span class="text-sm text-dark-300">AI Powered by ResNet152 & ViT-B/16</span>
+        </div>
+
+        <!-- Main heading -->
+        <h1 class="text-5xl md:text-7xl font-display font-bold text-white mb-6 animate-slide-up">
+          あなたの写真の<br />
+          <span class="gradient-text bg-300% animate-gradient">「エモさ」</span>を<br />
+          数値化する
+        </h1>
+
+        <!-- Subheading -->
+        <p class="text-lg md:text-xl text-dark-400 max-w-2xl mx-auto mb-10 animate-slide-up animation-delay-100">
+          AIがあなたの写真を分析して、エモ度をスコア化。<br class="hidden md:block" />
+          さらにエモく加工してSNSでシェアしよう。
+        </p>
+
+        <!-- CTA Buttons -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up animation-delay-200">
+          <NuxtLink
+            to="/app"
+            class="group btn-primary text-lg py-4 px-8 flex items-center gap-3"
           >
-            <PhGithubLogo :size="24" weight="fill" />
+            <PhSparkle :size="24" weight="fill" />
+            <span>今すぐ試す</span>
+            <PhArrowRight :size="20" weight="bold" class="group-hover:translate-x-1 transition-transform" />
+          </NuxtLink>
+          <a
+            href="#how-to-use"
+            class="btn-secondary text-lg py-4 px-8 flex items-center gap-3"
+          >
+            <PhPlay :size="20" weight="fill" />
+            <span>使い方を見る</span>
           </a>
         </div>
-      </header>
 
-      <!-- メインエリア -->
-      <main class="px-4 pb-12">
-        <div class="max-w-4xl mx-auto">
-          <!-- タイトルセクション -->
-          <section class="text-center py-12">
-            <h2 class="text-4xl md:text-5xl font-display font-bold text-white mb-4">
-              あなたの写真の<br />
-              <span class="gradient-text">「エモさ」</span>を判定
-            </h2>
-            <p class="text-dark-400 max-w-md mx-auto">
-              AIがあなたの写真を分析して、エモ度をスコア化。<br />
-              さらにエモく加工してSNSでシェアしよう。
-            </p>
-          </section>
+        <!-- Demo preview -->
+        <div class="mt-16 relative animate-slide-up animation-delay-300">
+          <div class="relative mx-auto max-w-2xl">
+            <!-- Glow effect -->
+            <div class="absolute -inset-4 bg-gradient-to-r from-emo-pink via-emo-purple to-emo-blue rounded-3xl blur-2xl opacity-30" />
 
-          <!-- メインカード -->
-          <div class="card p-6 md:p-8">
-            <!-- エラー表示 -->
-            <div
-              v-if="error"
-              class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400"
-            >
-              {{ error }}
-            </div>
-
-            <!-- 結果表示モード -->
-            <div v-if="result" class="space-y-8">
-              <!-- 画像プレビュー（小さく表示） -->
-              <div class="flex justify-center">
-                <div class="relative w-40 h-40 rounded-xl overflow-hidden">
-                  <img
-                    :src="previewUrl || ''"
-                    alt="Analyzed image"
-                    class="w-full h-full object-cover"
-                  />
+            <!-- Screenshot mockup -->
+            <div class="relative bg-dark-900 rounded-2xl border border-dark-700 overflow-hidden shadow-2xl">
+              <div class="flex items-center gap-2 px-4 py-3 bg-dark-800 border-b border-dark-700">
+                <div class="w-3 h-3 rounded-full bg-red-500" />
+                <div class="w-3 h-3 rounded-full bg-yellow-500" />
+                <div class="w-3 h-3 rounded-full bg-green-500" />
+              </div>
+              <div class="p-8 text-center">
+                <div class="text-6xl font-display font-bold gradient-text mb-2">87%</div>
+                <div class="text-dark-400 text-sm uppercase tracking-wider">Emo Score</div>
+                <div class="mt-4 flex justify-center gap-2">
+                  <div class="w-8 h-8 rounded-lg bg-pink-400" />
+                  <div class="w-8 h-8 rounded-lg bg-purple-400" />
+                  <div class="w-8 h-8 rounded-lg bg-blue-400" />
+                  <div class="w-8 h-8 rounded-lg bg-orange-400" />
+                  <div class="w-8 h-8 rounded-lg bg-teal-400" />
                 </div>
               </div>
-
-              <!-- スコア表示 -->
-              <EmoScore :score="result.emo_score" :model-used="result.model_used" />
-
-              <!-- カラーパレット -->
-              <div class="pt-8 border-t border-dark-700">
-                <ColorPalette :colors="result.color_palette" />
-              </div>
-
-              <!-- Emo Booster -->
-              <div class="pt-8 border-t border-dark-700">
-                <EmoBooster
-                  :original-file="selectedFile!"
-                  :is-processing="isBoostProcessing"
-                  :processed-image-url="processedImageUrl"
-                  :applied-filter="appliedFilter"
-                  @apply-filter="applyFilter"
-                  @download="handleDownload"
-                  @reset="resetBooster"
-                />
-              </div>
-
-              <!-- 別の画像を試すボタン -->
-              <div class="pt-6 border-t border-dark-700">
-                <button
-                  @click="resetAll"
-                  class="w-full btn-secondary flex items-center justify-center gap-2"
-                >
-                  <PhArrowClockwise :size="20" weight="bold" />
-                  <span>別の画像を試す</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- アップロードモード -->
-            <div v-else class="space-y-6">
-              <!-- モデル選択 -->
-              <div class="flex justify-center">
-                <ModelSelector v-model="selectedModel" />
-              </div>
-
-              <!-- 画像アップロード -->
-              <ImageUploader v-model="selectedFile" v-model:preview-url="previewUrl" />
-
-              <!-- 分析ボタン -->
-              <button
-                v-if="selectedFile"
-                @click="analyzeImage"
-                :disabled="isLoading"
-                class="w-full btn-primary text-lg py-4 flex items-center justify-center gap-3"
-              >
-                <PhSparkle :size="24" weight="fill" />
-                <span>エモ度を判定する</span>
-              </button>
             </div>
           </div>
-
-          <!-- フッター -->
-          <footer class="mt-12 text-center text-sm text-dark-500">
-            <p>
-              Made with 💜 for Portfolio | Powered by ResNet152 & ViT-B/16
-            </p>
-          </footer>
         </div>
-      </main>
-    </div>
+      </div>
+
+      <!-- Scroll indicator -->
+      <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+        <div class="w-6 h-10 rounded-full border-2 border-dark-600 flex justify-center pt-2">
+          <div class="w-1.5 h-3 rounded-full bg-dark-500" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-24 px-4">
+      <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl md:text-4xl font-display font-bold text-white mb-4">
+            3つの特徴
+          </h2>
+          <p class="text-dark-400">エモさを科学する、新しい写真体験</p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8">
+          <div
+            v-for="(feature, index) in features"
+            :key="feature.title"
+            class="group relative p-8 rounded-2xl bg-dark-900/50 border border-dark-800 hover:border-dark-700 transition-all duration-300"
+          >
+            <!-- Icon -->
+            <div
+              :class="[
+                'w-14 h-14 rounded-xl flex items-center justify-center mb-6 bg-gradient-to-br',
+                feature.gradient,
+              ]"
+            >
+              <component :is="feature.icon" :size="28" weight="duotone" class="text-white" />
+            </div>
+
+            <!-- Content -->
+            <h3 class="text-xl font-bold text-white mb-3">{{ feature.title }}</h3>
+            <p class="text-dark-400 leading-relaxed">{{ feature.description }}</p>
+
+            <!-- Hover glow -->
+            <div
+              :class="[
+                'absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10 blur-xl',
+                `bg-gradient-to-br ${feature.gradient}`,
+              ]"
+              style="opacity: 0.1"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How to Use Section -->
+    <section id="how-to-use" class="py-24 px-4 bg-dark-900/50">
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl md:text-4xl font-display font-bold text-white mb-4">
+            使い方
+          </h2>
+          <p class="text-dark-400">たった3ステップでエモ度を判定</p>
+        </div>
+
+        <div class="space-y-8">
+          <div
+            v-for="(step, index) in steps"
+            :key="step.number"
+            class="flex items-start gap-6 p-6 rounded-2xl bg-dark-800/30 border border-dark-800"
+          >
+            <!-- Number -->
+            <div class="flex-shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br from-emo-pink to-emo-purple flex items-center justify-center">
+              <span class="text-2xl font-display font-bold text-white">{{ step.number }}</span>
+            </div>
+
+            <!-- Content -->
+            <div class="pt-2">
+              <h3 class="text-xl font-bold text-white mb-2">{{ step.title }}</h3>
+              <p class="text-dark-400">{{ step.description }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="text-center mt-12">
+          <NuxtLink
+            to="/app"
+            class="inline-flex items-center gap-3 btn-primary text-lg py-4 px-8"
+          >
+            <PhSparkle :size="24" weight="fill" />
+            <span>さっそく試してみる</span>
+          </NuxtLink>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-8 px-4 border-t border-dark-800">
+      <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <PhSparkle :size="20" weight="fill" class="text-emo-pink" />
+          <span class="font-display font-bold text-white">Emo-Check</span>
+        </div>
+        <p class="text-sm text-dark-500">
+          Made with 💜 for Portfolio | Powered by ResNet152 & ViT-B/16
+        </p>
+      </div>
+    </footer>
   </div>
 </template>

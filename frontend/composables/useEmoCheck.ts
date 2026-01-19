@@ -6,10 +6,18 @@ export interface ColorPalette {
   percentage: number
 }
 
+export interface EmoComponent {
+  name: string
+  percentage: number
+  description: string
+}
+
 export interface PredictResult {
   emo_score: number
   model_used: string
   color_palette: ColorPalette[]
+  emo_components: EmoComponent[]
+  emo_comment: string
 }
 
 export interface BoostResult {

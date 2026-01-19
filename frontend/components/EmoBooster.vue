@@ -4,6 +4,7 @@ import type { FilterType } from '~/composables/useEmoCheck'
 
 interface Props {
   originalFile: File
+  originalPreviewUrl: string
   isProcessing: boolean
   processedImageUrl: string | null
   appliedFilter: string | null
@@ -50,19 +51,14 @@ const filters = [
     </div>
 
     <!-- 処理結果表示 -->
-    <div v-if="processedImageUrl" class="space-y-4">
-      <!-- 加工済み画像 -->
-      <div class="relative rounded-2xl overflow-hidden gradient-border">
-        <img
-          :src="processedImageUrl"
-          :alt="appliedFilter || 'Processed image'"
-          class="w-full h-auto max-h-[400px] object-contain bg-dark-950"
-        />
-        <!-- フィルター名バッジ -->
-        <div class="absolute top-4 left-4 px-3 py-1 rounded-full bg-dark-900/80 backdrop-blur-sm text-sm">
-          {{ appliedFilter }}
-        </div>
-      </div>
+    <div v-if="processedImageUrl" class="space-y-6">
+      <!-- ビフォーアフター比較 -->
+      <BeforeAfterSlider
+        :before-url="originalPreviewUrl"
+        :after-url="processedImageUrl"
+        before-label="Original"
+        :after-label="appliedFilter || 'Filtered'"
+      />
 
       <!-- アクションボタン -->
       <div class="flex gap-3">
