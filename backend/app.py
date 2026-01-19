@@ -343,10 +343,12 @@ async def boost(
         raise HTTPException(status_code=500, detail=f"画像加工中にエラーが発生しました: {str(e)}")
 
 
-# 起動時にモデルを事前ロード（デプロイ時のタイムアウト対策）
-print("Pre-loading models at startup...")
-get_models()
-print("Models ready!")
+@app.on_event("startup")
+async def startup_event():
+    """サーバー起動後にモデルをロード"""
+    print("Pre-loading models at startup...")
+    get_models()
+    print("Models ready!")
 
 
 if __name__ == "__main__":
