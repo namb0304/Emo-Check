@@ -6,10 +6,10 @@ Emo-Check: FastAPI バックエンド
 
 import os
 import io
-import glob  # 追加: ファイル検索用
+import glob
 import base64
 from typing import Optional
-from contextlib import asynccontextmanager
+# lifespanは削除します（起動時間を短縮するため）
 
 import torch
 import torch.nn as nn
@@ -36,7 +36,7 @@ from image_processing import (
     image_to_base64
 )
 
-# グローバル変数でモデルを保持
+# グローバル変数でモデルを保持（最初はNoneにしておく）
 resnet_model = None
 vit_model = None
 device = None
@@ -71,144 +71,119 @@ def build_vit_b16(num_classes: int = 2):
 
 
 def ensure_model_file(model_path):
-    """
-    分割されたモデルファイルがあれば結合して復元する
-    """
-    # 既に実体ファイルがあり、かつサイズが十分（例: 1MB以上）なら何もしない
-    # ※LFSポインタファイル（1KB以下）が残っている場合の対策
+    """分割されたモデルファイルがあれば結合して復元する"""
     if os.path.exists(model_path) and os.path.getsize(model_path) > 1024 * 1024:
         return
 
     print(f"Reconstructing {model_path} from parts...")
     base_name = os.path.basename(model_path)
     dir_name = os.path.dirname(model_path)
-    
-    # 分割ファイルを探す (例: resnet152.pth.aa, resnet152.pth.ab ...)
     pattern = os.path.join(dir_name, base_name + ".*")
-    # .pth 自体を除外して、分割パーツ(.aa, .ab等)のみを取得
     parts = sorted([p for p in glob.glob(pattern) if not p.endswith('.pth')])
 
     if not parts:
-        # 分割ファイルがない場合はスキップ（既存ファイルを信じる）
         print(f"No split parts found for {model_path}")
         return
 
-    # 結合処理
     try:
         with open(model_path, 'wb') as outfile:
             for part in parts:
-                print(f"  - Appending {part}")
                 with open(part, 'rb') as infile:
                     outfile.write(infile.read())
         print(f"Successfully reconstructed {model_path}")
     except Exception as e:
         print(f"Error reconstructing model: {e}")
-        # エラー時は不完全なファイルを削除しておく
         if os.path.exists(model_path):
             os.remove(model_path)
 
 
-def load_models():
-    """モデルをロード"""
+def get_models():
+    """
+    モデルを取得する（未ロードの場合はここでロードする）
+    これぞ「遅延読み込み」！
+    """
     global resnet_model, vit_model, device
 
+    # すでにロード済みならそれを返す（2回目以降は爆速）
+    if resnet_model is not None and vit_model is not None:
+        return resnet_model, vit_model, device
+
+    print("Loading models for the first time...")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    # モデルファイルのパス
     models_dir = os.path.join(os.path.dirname(__file__), 'models')
     resnet_path = os.path.join(models_dir, 'resnet152.pth')
     vit_path = os.path.join(models_dir, 'vit_b16.pth')
 
-    # ★ここで分割ファイルを結合！
+    # ファイル結合
     ensure_model_file(resnet_path)
     ensure_model_file(vit_path)
 
-    # ResNet152のロード
+    # ResNetロード
     resnet_model = build_resnet152()
     if os.path.exists(resnet_path):
         resnet_model.load_state_dict(torch.load(resnet_path, map_location=device, weights_only=False))
-        print(f"ResNet152 loaded from {resnet_path}")
+        print("ResNet152 loaded")
     else:
-        print(f"Warning: ResNet152 weights not found at {resnet_path}. Using random weights.")
+        print("Warning: ResNet152 weights not found.")
     resnet_model = resnet_model.to(device)
     resnet_model.eval()
 
-    # ViT-B/16のロード
+    # ViTロード
     vit_model = build_vit_b16()
     if os.path.exists(vit_path):
         vit_model.load_state_dict(torch.load(vit_path, map_location=device, weights_only=False))
-        print(f"ViT-B/16 loaded from {vit_path}")
+        print("ViT-B/16 loaded")
     else:
-        print(f"Warning: ViT-B/16 weights not found at {vit_path}. Using random weights.")
+        print("Warning: ViT-B/16 weights not found.")
     vit_model = vit_model.to(device)
     vit_model.eval()
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """アプリケーションのライフサイクル管理"""
-    # 起動時にモデルをロード
-    load_models()
-    yield
-    # シャットダウン時の処理（必要に応じて）
+    return resnet_model, vit_model, device
 
 
-# FastAPIアプリケーションの作成
+# FastAPIアプリケーションの作成（lifespanは削除）
 app = FastAPI(
     title="Emo-Check API",
     description="画像のエモ度を判定し、エモく加工するAPI",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
-# CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番環境では適切なオリジンに制限する
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 画像の前処理
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-
+# --- Pydantic Models ---
 class EmoComponent(BaseModel):
-    """エモ成分"""
     name: str
     percentage: int
     description: str
 
-
 class PredictResponse(BaseModel):
-    """予測結果のレスポンス"""
     emo_score: float
     model_used: str
     color_palette: list
     emo_components: list
     emo_comment: str
 
-
 class BoostResponse(BaseModel):
-    """画像加工結果のレスポンス"""
     image_base64: str
     filter_applied: str
 
-
+# --- Helper Functions ---
 def analyze_emo_components(emo_score: float, color_palette: list) -> tuple[list[dict], str]:
-    """
-    エモ成分を分析する
-    スコアとカラーパレットから「エモさ」の内訳を生成
-    """
     import random
-
-    # 成分候補
     components_pool = [
         {"name": "ノスタルジー", "description": "過去への憧れや懐かしさ"},
         {"name": "儚さ", "description": "消えゆく美しさへの感傷"},
@@ -219,18 +194,9 @@ def analyze_emo_components(emo_score: float, color_palette: list) -> tuple[list[
         {"name": "希望", "description": "未来への淡い期待"},
         {"name": "哀愁", "description": "心に染みる寂しさ"},
     ]
-
-    # カラーパレットの色味で成分を調整
-    has_warm = any(c["rgb"][0] > c["rgb"][2] for c in color_palette[:3])
-    has_cool = any(c["rgb"][2] > c["rgb"][0] for c in color_palette[:3])
-    has_dark = any(sum(c["rgb"]) < 300 for c in color_palette[:3])
-
-    # スコアに基づいて3-4個の成分を選択
     random.seed(int(emo_score * 100))
     num_components = 3 if emo_score < 50 else 4
     selected = random.sample(components_pool, num_components)
-
-    # パーセンテージを割り当て（合計100%）
     remaining = 100
     components = []
     for i, comp in enumerate(selected):
@@ -244,57 +210,35 @@ def analyze_emo_components(emo_score: float, color_palette: list) -> tuple[list[
             "percentage": pct,
             "description": comp["description"]
         })
-
-    # パーセンテージでソート
     components.sort(key=lambda x: x["percentage"], reverse=True)
-
-    # コメント生成
-    comments_high = [
-        "この写真、めちゃくちゃエモい...。心に響く一枚です。",
-        "言葉にできない感情が溢れてくる。最高にエモい。",
-        "これはSNSでバズる予感。エモさ満点です。",
-        "見た瞬間、心を掴まれました。素敵な一枚。",
-    ]
-    comments_mid = [
-        "いい雰囲気出てます。もう少しでエモさ全開かも。",
-        "エモさの片鱗が見える。加工でさらに引き立つかも。",
-        "悪くない。フィルターを試してみて。",
-        "何か惹かれるものがある一枚です。",
-    ]
-    comments_low = [
-        "エモさは控えめ。でも加工次第で化けるかも？",
-        "日常の一コマって感じ。フィルターで遊んでみよう。",
-        "シンプルな写真ですね。Y2Kフィルターがおすすめ。",
-        "これから伸びしろあり。加工してみて。",
-    ]
+    
+    comments_high = ["この写真、めちゃくちゃエモい...。", "言葉にできない感情が溢れてくる。", "これはSNSでバズる予感。", "見た瞬間、心を掴まれました。"]
+    comments_mid = ["いい雰囲気出てます。", "エモさの片鱗が見える。", "悪くない。フィルターを試してみて。", "何か惹かれるものがある一枚です。"]
+    comments_low = ["エモさは控えめ。", "日常の一コマって感じ。", "シンプルな写真ですね。", "これから伸びしろあり。"]
 
     random.seed(int(emo_score * 1000) + len(color_palette))
-    if emo_score >= 70:
-        comment = random.choice(comments_high)
-    elif emo_score >= 40:
-        comment = random.choice(comments_mid)
-    else:
-        comment = random.choice(comments_low)
-
+    if emo_score >= 70: comment = random.choice(comments_high)
+    elif emo_score >= 40: comment = random.choice(comments_mid)
+    else: comment = random.choice(comments_low)
     return components, comment
 
 
+# --- Endpoints ---
+
 @app.get("/")
 async def root():
-    """ヘルスチェック"""
+    """ヘルスチェック：ここは即座に返す！"""
     return {"message": "Emo-Check API is running", "status": "ok"}
 
 
 @app.get("/health")
 async def health_check():
     """詳細なヘルスチェック"""
+    # ここでモデルの状態を確認するが、ロードはしない
     return {
         "status": "healthy",
-        "models": {
-            "resnet152": resnet_model is not None,
-            "vit_b16": vit_model is not None
-        },
-        "device": str(device)
+        "models_loaded": resnet_model is not None,
+        "device": str(device) if device else "not_initialized"
     }
 
 
@@ -303,59 +247,43 @@ async def predict(
     file: UploadFile = File(...),
     model_type: str = Form(default="resnet")
 ):
-    """
-    画像のエモ度を判定する
+    """画像のエモ度を判定する"""
+    
+    # ★重要：ここで初めてモデルをロードする！
+    # アプリ起動時ではなく、誰かが「診断」ボタンを押したときに準備する
+    current_resnet, current_vit, current_device = get_models()
 
-    Args:
-        file: アップロードされた画像ファイル
-        model_type: 使用するモデル ("resnet" or "vit")
-
-    Returns:
-        emo_score: エモ度スコア (0-100%)
-        model_used: 使用したモデル名
-        color_palette: 抽出したカラーパレット
-    """
-    # ファイル形式のチェック（HEIC含む）
-    allowed_types = ["image/", "application/octet-stream"]  # HEICはoctet-streamで来ることがある
+    allowed_types = ["image/", "application/octet-stream"]
     is_heic = file.filename and file.filename.lower().endswith(('.heic', '.heif'))
 
     if not is_heic and (not file.content_type or not any(file.content_type.startswith(t) for t in allowed_types)):
         raise HTTPException(status_code=400, detail="画像ファイルをアップロードしてください")
-
     if is_heic and not HEIC_SUPPORTED:
-        raise HTTPException(status_code=400, detail="HEIC形式はサポートされていません。pillow-heifをインストールしてください。")
+        raise HTTPException(status_code=400, detail="HEIC形式はサポートされていません。")
 
     try:
-        # 画像データを読み込み
         image_bytes = await file.read()
-
-        # PILで画像を開く（HEICも自動対応）
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-        # HEIC等の場合、image_bytesをJPEG形式に変換してからカラーパレット抽出
         if is_heic:
             jpeg_buffer = io.BytesIO()
             image.save(jpeg_buffer, format='JPEG', quality=95)
             image_bytes = jpeg_buffer.getvalue()
 
-        # カラーパレットを抽出
         color_palette = extract_color_palette(image_bytes)
-        image_tensor = transform(image).unsqueeze(0).to(device)
+        image_tensor = transform(image).unsqueeze(0).to(current_device)
 
-        # モデル選択と推論
         if model_type.lower() == "vit":
-            model = vit_model
+            model = current_vit
             model_name = "ViT-B/16"
         else:
-            model = resnet_model
+            model = current_resnet
             model_name = "ResNet152"
 
         with torch.no_grad():
             outputs = model(image_tensor)
             probabilities = torch.softmax(outputs, dim=1)
-            emo_score = probabilities[0][1].item() * 100  # class_1 (Emo) の確率
+            emo_score = probabilities[0][1].item() * 100
 
-        # エモ成分分析
         emo_components, emo_comment = analyze_emo_components(emo_score, color_palette)
 
         return PredictResponse(
@@ -367,6 +295,7 @@ async def predict(
         )
 
     except Exception as e:
+        print(f"Error in predict: {e}")
         raise HTTPException(status_code=500, detail=f"予測処理中にエラーが発生しました: {str(e)}")
 
 
@@ -375,55 +304,34 @@ async def boost(
     file: UploadFile = File(...),
     filter_type: str = Form(...)
 ):
-    """
-    画像にフィルターを適用してエモく加工する
-
-    Args:
-        file: アップロードされた画像ファイル
-        filter_type: フィルタータイプ ("pixel" or "y2k")
-
-    Returns:
-        image_base64: Base64エンコードされた加工後画像
-        filter_applied: 適用されたフィルター名
-    """
-    # ファイル形式のチェック（HEIC含む）
+    """画像にフィルターを適用してエモく加工する"""
     allowed_types = ["image/", "application/octet-stream"]
     is_heic = file.filename and file.filename.lower().endswith(('.heic', '.heif'))
 
     if not is_heic and (not file.content_type or not any(file.content_type.startswith(t) for t in allowed_types)):
         raise HTTPException(status_code=400, detail="画像ファイルをアップロードしてください")
-
     if is_heic and not HEIC_SUPPORTED:
-        raise HTTPException(status_code=400, detail="HEIC形式はサポートされていません。pillow-heifをインストールしてください。")
+        raise HTTPException(status_code=400, detail="HEIC形式はサポートされていません。")
 
-    # フィルタータイプのチェック
     valid_filters = ["pixel", "y2k"]
     if filter_type.lower() not in valid_filters:
-        raise HTTPException(
-            status_code=400,
-            detail=f"無効なフィルタータイプです。使用可能: {', '.join(valid_filters)}"
-        )
+        raise HTTPException(status_code=400, detail=f"無効なフィルタータイプです。")
 
     try:
-        # 画像データを読み込み
         image_bytes = await file.read()
-
-        # HEIC形式の場合、JPEGに変換
         if is_heic:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             jpeg_buffer = io.BytesIO()
             image.save(jpeg_buffer, format='JPEG', quality=95)
             image_bytes = jpeg_buffer.getvalue()
 
-        # フィルター適用
         if filter_type.lower() == "pixel":
             processed_bytes = apply_pixel_art(image_bytes)
             filter_name = "Pixel Art Mode"
-        else:  # y2k
+        else:
             processed_bytes = apply_y2k_film(image_bytes)
             filter_name = "Y2K Film Mode"
 
-        # Base64エンコード
         image_base64 = image_to_base64(processed_bytes)
 
         return BoostResponse(
