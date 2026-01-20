@@ -30,8 +30,8 @@ image = (
 )
 @modal.asgi_app()
 def fastapi_app():
-    # パスを通す
-    sys.path.append("/root")
-    # backendフォルダの中のapp.pyからappオブジェクトをインポート
-    from backend.app import app
+    # backendフォルダをパスに追加（image_processingをインポートできるように）
+    sys.path.insert(0, "/root/backend")
+    # appをインポート
+    from app import app
     return app
