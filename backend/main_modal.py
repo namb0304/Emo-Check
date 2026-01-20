@@ -1,5 +1,4 @@
 import sys
-import os
 import modal
 
 # アプリ名を指定
@@ -20,6 +19,7 @@ image = (
         "scikit-learn",
         "pillow-heif"
     )
+    .add_local_dir("./backend", remote_path="/root/backend")
 )
 
 # FastAPIアプリをラップする関数
@@ -27,8 +27,6 @@ image = (
     image=image,
     gpu="T4",     # GPUを指定
     timeout=600,  # タイムアウト10分
-    # ★重要: ローカルのファイルをマウントする設定
-    mounts=[modal.Mount.from_local_dir("./backend", remote_path="/root/backend")]
 )
 @modal.asgi_app()
 def fastapi_app():
