@@ -17,7 +17,8 @@ image = (
         "torchvision",
         "numpy",
         "scikit-learn",
-        "pillow-heif"
+        "pillow-heif",
+        "opencv-python-headless"
     )
     .add_local_dir("./backend", remote_path="/root/backend")
 )
